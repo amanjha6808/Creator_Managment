@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/metrics/scrape -H \"Content-Type: application/json\" -d '{\"url\":\"https://www.instagram.com/reel/CxKxPToRqF2/\"}')",
+      "Bash(curl -s -I \"https://www.instagram.com/p/CxKxPToRqF2/?__a=1&__d=1\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\")",
+      "Bash(curl -sL \"https://www.instagram.com/reel/CxKxPToRqF2/\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\")",
+      "Bash(curl -sL \"https://www.instagram.com/reel/CxKxPToRqF2/\" -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" -H \"Accept-Language: en-US,en;q=0.9\")",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(yt-dlp --dump-json \"https://www.instagram.com/reel/CxKxPToRqF2/\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k: d.get\\(k\\) for k in ['view_count','like_count','comment_count','title','id','extractor']}, indent=2\\)\\)\")",
+      "Bash(python -m yt_dlp --dump-json \"https://www.instagram.com/reel/CxKxPToRqF2/\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/metrics/scrape-bulk -H \"Content-Type: application/json\" -d '{\"requests\":[{\"url\":\"https://www.instagram.com/reel/CxKxPToRqF2/\",\"creator_id\":\"1\"},{\"url\":\"https://www.instagram.com/reel/DABCDEFGHIJ/\",\"creator_id\":\"2\"}]}')",
+      "Bash(python -m json.tool)",
+      "Bash(npx tsc *)",
+      "Bash(Get-ChildItem -Recurse -Depth 1 \"D:/Creator Managment/frontend/app/api\")",
+      "Bash(Select-Object FullName)",
+      "Bash(Get-ChildItem -Recurse -Depth 1 \"D:/Creator Managment/frontend/app/dashboard\")",
+      "Bash(Get-ChildItem -Recurse -Depth 1 \"D:/Creator Managment/frontend/components/dashboard\")",
+      "Bash(Get-ChildItem -Recurse -Depth 1 \"D:/Creator Managment/frontend/components/modals\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -sL http://localhost:3000)",
+      "Bash(curl -sL http://localhost:3000/dashboard)",
+      "Bash(curl -sL http://localhost:3001/dashboard)",
+      "Bash(curl -sL http://localhost:3001/)",
+      "Bash(curl *)",
+      "Bash(grep -oP '.{0,20}\\(?:sheetId|gid|title\\).{0,20}')",
+      "Bash(grep -oP '\\\\d{8,11}')",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3000)",
+      "Bash(tasklist //FI \"PID eq 17172\" //V)",
+      "Bash(wmic process *)",
+      "Bash(powershell.exe -Command \"Get-CimInstance Win32_Process -Filter 'ProcessId=17172' | Select-Object CommandLine\")",
+      "Bash(taskkill /F /PID 17172)",
+      "Bash(findstr \":3000\")",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(powershell.exe *)"
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/metrics)",
+      "Bash(curl -s -w \"\\\\n%{http_code}\" -X POST http://localhost:3000/api/metrics/scrape -H \"Content-Type: application/json\" -d '{\"url\":\"https://www.instagram.com/reel/test/\"}')",
+      "Bash(npx next *)",
+      "Bash(curl *)",
+      "Bash(node -e \"const pw = require\\('playwright'\\); console.log\\(pw.chromium ? 'chromium available' : 'no chromium'\\);\")",
+      "Bash(npx playwright *)",
+      "Read(//d/Creator Managment/frontend/**)",
+      "Bash(node -e \"const { execSync } = require\\('child_process'\\); try { console.log\\(execSync\\('npx playwright install chromium 2>&1'\\).toString\\(\\)\\); } catch\\(e\\) { console.log\\(e.message\\); }\")",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(curl.exe -s http://192.168.1.10:3000/dashboard 2>&1 | Select-Object -First 5)",
+      "PowerShell(Get-CimInstance *)",
+      "PowerShell(curl.exe -s http://localhost:3000/dashboard -o \"$env:TEMP\\\\dashboard.html\" 2>&1)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(curl.exe -s -o NUL -w \"%{http_code}\" http://192.168.1.10:3000/_next/static/chunks/app_dashboard_page_tsx_1745a38._.js 2>&1)",
+      "PowerShell($p = Start-Process -FilePath \"D:\\\\Creator Managment\\\\frontend\\\\node_modules\\\\.bin\\\\next.cmd\" -WorkingDirectory \"D:\\\\Creator Managment\\\\frontend\" -ArgumentList \"dev -H 0.0.0.0 -p 3000\" -NoNewWindow -RedirectStandardOutput \"$env:TEMP\\\\next-v2-out.txt\" -RedirectStandardError \"$env:TEMP\\\\next-v2-err.txt\" -PassThru; $p.Id)",
+      "PowerShell(node \"D:\\\\Creator Managment\\\\frontend\\\\test-interactions.mjs\" 2>&1)",
+      "Bash(tasklist /FI \"IMAGENAME eq node.exe\")",
+      "Bash(findstr /i node)",
+      "Bash(npm install *)",
+      "Bash(mkdir -p \"app/api/campaigns/[id]/creators\")",
+      "Bash(mkdir -p \"app/api/creators/[id]\")"
+    ]
+  }
+}
