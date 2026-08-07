@@ -4,7 +4,7 @@ import { Creator, CreatorStatus, CreatorUpdate } from "@/lib/types";
 import { formatINR } from "@/lib/csv";
 import { openWhatsApp } from "@/lib/whatsapp";
 import { StatusBadge } from "./StatusBadge";
-import { Trash2, MessageCircle, Video } from "lucide-react";
+import { Trash2, MessageCircle, Video, Edit2 } from "lucide-react";
 import { clsx } from "clsx";
 import { useState } from "react";
 
@@ -22,6 +22,7 @@ interface CreatorCardsProps {
   onToggleSelect: (id: string) => void;
   onUpdateCreator: (id: string, data: CreatorUpdate) => void;
   onDeleteCreator: (id: string) => void;
+  onEditCreator: (creator: Creator) => void;
 }
 
 export function CreatorCards({
@@ -30,8 +31,16 @@ export function CreatorCards({
   onToggleSelect,
   onUpdateCreator,
   onDeleteCreator,
+  onEditCreator,
 }: CreatorCardsProps) {
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [editingReel, setEditingReel] = useState<{ id: string; value: string } | null>(null);
+
+  const commitReel = (c: Creator) => {
+    if (editingReel?.id !== c.id) return;
+    onUpdateCreator(c.id, { reel_link: editingReel.value.trim() || null });
+    setEditingReel(null);
+  };
 
   if (creators.length === 0) {
     return (
@@ -136,6 +145,14 @@ export function CreatorCards({
                   </a>
                 )}
                 <button
+                  onClick={() => onEditCreator(c)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-pointer"
+                  title="Edit creator contact details"
+                  aria-label={`Edit ${c.name}`}
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button
                   onClick={() => onDeleteCreator(c.id)}
                   className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors cursor-pointer"
                   title="Delete creator"
@@ -176,47 +193,66 @@ export function CreatorCards({
             </div>
 
             
-            {/* Reel Link info if available */}
-            {c.reel_link && (
-              <div className="px-4 py-2 bg-purple-50/50 border-t border-purple-50 flex items-center justify-between">
-                <span className="text-xs text-purple-700 font-medium flex items-center gap-1">
-                  <Video className="w-3.5 h-3.5 text-purple-600" />
-                  Reel Link
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (!c.reel_link) {
+            {/* Reel Link — view / copy / edit / add */}
+            <div className="px-4 py-2 bg-purple-50/50 border-t border-purple-50">
+              {editingReel?.id === c.id ? (
+                <input
+                  autoFocus
+                  type="url"
+                  value={editingReel.value}
+                  onChange={(e) => setEditingReel({ id: c.id, value: e.target.value })}
+                  onBlur={() => commitReel(c)}
+                  onKeyDown={(e) => e.key === "Enter" && commitReel(c)}
+                  placeholder="https://instagram.com/reel/..."
+                  className="w-full px-2 py-1.5 text-xs border border-purple-300 rounded-md outline-none focus:ring-2 focus:ring-purple-100 bg-white"
+                />
+              ) : c.reel_link ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-purple-700 font-medium flex items-center gap-1">
+                    <Video className="w-3.5 h-3.5 text-purple-600" />
+                    Reel Link
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(c.reel_link as string);
                         const toast = document.createElement("div");
-                        toast.className = "fixed bottom-4 right-4 bg-amber-600 text-white text-xs font-medium px-4 py-2 rounded-lg shadow-lg z-[100] animate-fade-in";
-                        toast.textContent = "No reel link to copy";
+                        toast.className = "fixed bottom-4 right-4 bg-slate-900 text-white text-xs font-medium px-4 py-2 rounded-lg shadow-lg z-[100] animate-fade-in";
+                        toast.textContent = "Reel link copied";
                         document.body.appendChild(toast);
                         setTimeout(() => toast.remove(), 2000);
-                        return;
-                      }
-                      navigator.clipboard.writeText(c.reel_link);
-                      const toast = document.createElement("div");
-                      toast.className = "fixed bottom-4 right-4 bg-slate-900 text-white text-xs font-medium px-4 py-2 rounded-lg shadow-lg z-[100] animate-fade-in";
-                      toast.textContent = "Reel link copied";
-                      document.body.appendChild(toast);
-                      setTimeout(() => toast.remove(), 2000);
-                    }}
-                    className="text-xs font-medium text-slate-600 hover:text-indigo-600 underline"
-                    title="Copy reel link"
-                  >
-                    Copy
-                  </button>
-                  <a
-                    href={c.reel_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-semibold text-purple-700 hover:text-purple-900 underline"
-                  >
-                    Watch Reel →
-                  </a>
+                      }}
+                      className="text-xs font-medium text-slate-600 hover:text-indigo-600 underline"
+                      title="Copy reel link"
+                    >
+                      Copy
+                    </button>
+                    <a
+                      href={c.reel_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-purple-700 hover:text-purple-900 underline"
+                    >
+                      Watch Reel →
+                    </a>
+                    <button
+                      onClick={() => setEditingReel({ id: c.id, value: c.reel_link ?? "" })}
+                      className="text-xs font-medium text-slate-500 hover:text-indigo-600 underline"
+                      title="Edit reel link"
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : (
+                <button
+                  onClick={() => setEditingReel({ id: c.id, value: "" })}
+                  className="w-full text-xs font-semibold text-purple-700 hover:text-purple-900 flex items-center justify-center gap-1 py-0.5 cursor-pointer"
+                >
+                  + Add Reel Link
+                </button>
+              )}
+            </div>
           </div>
         );
       })}

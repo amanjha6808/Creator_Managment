@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // This allows accessing the dev server from any device on the same network
   // NOTE: bare "*" wildcard is not supported — must use specific hostnames or *.domain patterns.
   // For a LAN dev server, include the machine's LAN IP here.
-  allowedDevOrigins: ["192.168.1.10", "192.168.1.7", "localhost", "127.0.0.1"],
+  allowedDevOrigins: ["192.168.1.10", "192.168.1.7", "localhost", "127.0.0.1","192.168.1.14"],
 
   // Enable detailed error logging in dev
   serverExternalPackages: [],

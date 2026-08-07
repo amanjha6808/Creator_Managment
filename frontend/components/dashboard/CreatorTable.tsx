@@ -24,6 +24,7 @@ interface CreatorTableProps {
   onDeselectAll: () => void;
   onUpdateCreator: (id: string, data: CreatorUpdate) => void;
   onDeleteCreator: (id: string) => void;
+  onEditCreator: (creator: Creator) => void;
 }
 
 export function CreatorTable({
@@ -34,6 +35,7 @@ export function CreatorTable({
   onDeselectAll,
   onUpdateCreator,
   onDeleteCreator,
+  onEditCreator,
 }: CreatorTableProps) {
   const allSelected = creators.length > 0 && selected.size === creators.length;
   const [editingCell, setEditingCell] = useState<{
@@ -169,6 +171,14 @@ export function CreatorTable({
 
                     {/* Action buttons directly beside creator name */}
                     <div className="flex items-center gap-1.5 ml-2">
+                      <button
+                        onClick={() => onEditCreator(c)}
+                        className="inline-flex items-center justify-center w-8 h-7 rounded-md bg-slate-100 text-slate-600 border border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 text-xs font-semibold transition-all shadow-2xs shrink-0 cursor-pointer"
+                        title="Edit creator contact details"
+                        aria-label={`Edit ${c.name}`}
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
                       {profileUrl && (
                         <a
                           href={profileUrl}

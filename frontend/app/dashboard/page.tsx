@@ -10,6 +10,7 @@ import { CreatorCards } from "@/components/dashboard/CreatorCards";
 import { CreatorGalleryGrid } from "@/components/dashboard/CreatorGalleryGrid";
 import { CSVUploadModal } from "@/components/modals/CSVUploadModal";
 import { AddCreatorModal } from "@/components/modals/AddCreatorModal";
+import { EditCreatorModal } from "@/components/modals/EditCreatorModal";
 import { DeleteCreatorModal } from "@/components/modals/DeleteCreatorModal";
 import { Button } from "@/components/ui/Button";
 import { useCampaigns } from "@/hooks/useCampaigns";
@@ -43,6 +44,7 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<CreatorStatus | "All">("All");
   const [pendingDelete, setPendingDelete] = useState<{ creator: Creator; campaignName: string } | null>(null);
+  const [editingCreator, setEditingCreator] = useState<Creator | null>(null);
 
   const {
     campaigns,
@@ -296,6 +298,7 @@ export default function DashboardPage() {
                   onDeselectAll={deselectAll}
                   onUpdateCreator={updateCreator}
                   onDeleteCreator={handleDeleteCreator}
+                  onEditCreator={setEditingCreator}
                 />
 
                 {/* Mobile Stacked Cards */}
@@ -305,6 +308,7 @@ export default function DashboardPage() {
                   onToggleSelect={toggleSelect}
                   onUpdateCreator={updateCreator}
                   onDeleteCreator={handleDeleteCreator}
+                  onEditCreator={setEditingCreator}
                 />
               </div>
             </>
@@ -349,6 +353,21 @@ export default function DashboardPage() {
           campaignName={pendingDelete.campaignName}
           onConfirm={handleConfirmDelete}
           onClose={() => setPendingDelete(null)}
+        />
+      )}
+
+      {editingCreator && (
+        <EditCreatorModal
+          creator={editingCreator}
+          onUpdate={async (id, data) => {
+            try {
+              await updateCreator(id, data);
+            } catch (error) {
+              console.error("Edit creator save failed", error);
+              throw error;
+            }
+          }}
+          onClose={() => setEditingCreator(null)}
         />
       )}
 
