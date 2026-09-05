@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { Creator, CreatorStatus } from "@/lib/types";
 import { exportCommercialSavingsCSV } from "@/lib/csv";
-import { Search, Users, Image, Download, LogOut, Loader2 } from "lucide-react";
+import { Search, Users, Image, Download, LogOut, Loader2, RefreshCw } from "lucide-react";
 import { clsx } from "clsx";
 
 type Modal = "csv" | "addCreator" | null;
@@ -45,6 +45,8 @@ export default function DashboardPage() {
   const [filterStatus, setFilterStatus] = useState<CreatorStatus | "All">("All");
   const [pendingDelete, setPendingDelete] = useState<{ creator: Creator; campaignName: string } | null>(null);
   const [editingCreator, setEditingCreator] = useState<Creator | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<null | { updated: number; notFound: number; skipped: number }>(null);
 
   const {
     campaigns,
@@ -64,6 +66,7 @@ export default function DashboardPage() {
     addCreator,
     updateCreator,
     removeCreator,
+    syncContacts,
     toggleSelect,
     selectAll,
     deselectAll,
@@ -102,6 +105,19 @@ export default function DashboardPage() {
   // Export handler
   const handleExport = () => {
     exportCommercialSavingsCSV(creators);
+  };
+
+  // Sync contacts handler
+  const handleSyncContacts = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncContacts();
+      setSyncResult(result);
+    } catch (err) {
+      console.error("Sync contacts failed", err);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const STATUS_TABS: (CreatorStatus | "All")[] = [
@@ -197,6 +213,8 @@ export default function DashboardPage() {
           onUploadCSV={() => setModal("csv")}
           onAddCreator={() => setModal("addCreator")}
           onExport={handleExport}
+          onSyncContacts={handleSyncContacts}
+          onSyncing={syncing}
           onLogout={handleLogout}
           onToggleSidebar={() => setMobileSidebarOpen(true)}
         />
@@ -236,6 +254,15 @@ export default function DashboardPage() {
 
                     {/* Mobile actions */}
                     <div className="flex items-center gap-2 md:hidden">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<RefreshCw className="w-3.5 h-3.5" />}
+                        onClick={handleSyncContacts}
+                        loading={syncing}
+                      >
+                        Sync
+                      </Button>
                       <Button
                         variant="secondary"
                         size="sm"
@@ -396,6 +423,44 @@ export default function DashboardPage() {
           }}
           onClose={() => setModal(null)}
         />
+      )}
+
+      {/* Sync Contacts Summary Modal */}
+      {syncResult && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 modal-backdrop">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm animate-scale-in overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center">
+                  <RefreshCw className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-base font-bold text-slate-900">Sync Complete</h2>
+              </div>
+            </div>
+            <div className="p-5 flex flex-col gap-3">
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="bg-emerald-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-emerald-700">{syncResult.updated}</p>
+                  <p className="text-xs text-emerald-600 font-medium">Found</p>
+                </div>
+                <div className="bg-red-50 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-red-600">{syncResult.notFound}</p>
+                  <p className="text-xs text-red-500 font-medium">Not Found</p>
+                </div>
+                <div className="bg-slate-100 rounded-xl p-3">
+                  <p className="text-2xl font-bold text-slate-600">{syncResult.skipped}</p>
+                  <p className="text-xs text-slate-500 font-medium">Skipped</p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-500 text-center">
+                Contacts matched from other campaigns using profile link or handle.
+              </p>
+              <Button variant="primary" onClick={() => setSyncResult(null)} fullWidth>
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

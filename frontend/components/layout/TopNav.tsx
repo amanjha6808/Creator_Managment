@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Upload, Download, UserPlus, FolderKanban, Plus, Menu, LogOut } from "lucide-react";
+import { Upload, Download, UserPlus, FolderKanban, Plus, Menu, LogOut, RefreshCw } from "lucide-react";
 import { Campaign } from "@/hooks/useCampaigns";
 
 interface TopNavProps {
@@ -16,6 +16,8 @@ interface TopNavProps {
   onUploadCSV: () => void;
   onAddCreator: () => void;
   onExport: () => void;
+  onSyncContacts?: () => void;
+  onSyncing?: boolean;
   onLogout?: () => void;
   onToggleSidebar?: () => void;
 }
@@ -29,6 +31,8 @@ export function TopNav({
   onUploadCSV,
   onAddCreator,
   onExport,
+  onSyncContacts,
+  onSyncing,
   onLogout,
   onToggleSidebar,
 }: TopNavProps) {
@@ -94,6 +98,19 @@ export function TopNav({
           >
             New Campaign
           </Button>
+
+          {/* Sync Contacts */}
+          {onSyncContacts && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw className="w-3.5 h-3.5" />}
+              onClick={onSyncContacts}
+              loading={onSyncing}
+            >
+              <span className="hidden sm:inline">Sync</span>
+            </Button>
+          )}
 
           {/* Export Savings */}
           <Button

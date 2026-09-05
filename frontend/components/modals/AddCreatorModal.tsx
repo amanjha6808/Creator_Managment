@@ -14,7 +14,7 @@ interface AddCreatorModalProps {
 export function AddCreatorModal({ onAdd, onClose }: AddCreatorModalProps) {
   const [form, setForm] = useState<CreatorCreate>({
     name: "",
-    phone: "",
+    phone: "+91",
     handle: "",
     target_budget: 0,
     locked_commercials: 0,
@@ -97,7 +97,7 @@ export function AddCreatorModal({ onAdd, onClose }: AddCreatorModalProps) {
             onChange={(e) => set("phone", e.target.value)}
             error={errors.phone}
             placeholder="919876543210"
-            hint="WhatsApp-compatible format, e.g. 919876543210"
+            hint="e.g. +919876543210"
             fullWidth
           />
 

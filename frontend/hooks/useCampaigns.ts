@@ -410,6 +410,62 @@ export function useCampaigns() {
     liveCount: creators.filter((c) => c.status === "Live").length,
   };
 
+  /** Sync missing contacts across campaigns by matching profile_link or handle. */
+  const syncContacts = useCallback(
+    async (): Promise<{ updated: number; notFound: number; skipped: number }> => {
+      let updated = 0;
+      let notFound = 0;
+      let skipped = 0;
+
+      // Build a lookup of all creators with non-empty phones, keyed by profile_link and handle
+      const phoneLookupByLink = new Map<string, string>();
+      const phoneLookupByHandle = new Map<string, string>();
+
+      for (const cr of allCreatorsAcrossCampaigns) {
+        if (!cr.phone || cr.phone.trim() === "") continue;
+        const cleanPhone = cr.phone.replace(/\D/g, "");
+        if (!cleanPhone) continue;
+
+        const link = cr.profile_link?.trim().toLowerCase();
+        if (link) phoneLookupByLink.set(link, cr.phone);
+
+        const handle = cr.handle?.trim().toLowerCase().replace(/^@/, "");
+        if (handle) phoneLookupByHandle.set(handle, cr.phone);
+      }
+
+      // Find creators in active campaign with missing phones and try to fill them
+      for (const cr of activeCampaign.creators) {
+        if (cr.removed_reason) { skipped++; continue; }
+        if (cr.phone && cr.phone.replace(/\D/g, "").length >= 5) { skipped++; continue; }
+
+        // Try matching by profile_link first, then by handle
+        let foundPhone: string | null = null;
+
+        const link = cr.profile_link?.trim().toLowerCase();
+        if (link && phoneLookupByLink.has(link)) {
+          foundPhone = phoneLookupByLink.get(link)!;
+        }
+
+        if (!foundPhone) {
+          const handle = cr.handle?.trim().toLowerCase().replace(/^@/, "");
+          if (handle && phoneLookupByHandle.has(handle)) {
+            foundPhone = phoneLookupByHandle.get(handle)!;
+          }
+        }
+
+        if (foundPhone) {
+          await updateCreator(cr.id, { phone: foundPhone });
+          updated++;
+        } else {
+          notFound++;
+        }
+      }
+
+      return { updated, notFound, skipped };
+    },
+    [activeCampaign.creators, allCreatorsAcrossCampaigns, updateCreator],
+  );
+
   return {
     campaigns,
     activeCampaign,
@@ -429,6 +485,7 @@ export function useCampaigns() {
     addCreator,
     updateCreator,
     removeCreator,
+    syncContacts,
     toggleSelect,
     selectAll,
     deselectAll,
