@@ -209,46 +209,49 @@ export function useCampaigns() {
 
   // ─── Creator Management ──────────────────────────────────────────────────
 
+  const sanitizeIncomingRows = useCallback((incoming: any[]) => {
+    return incoming
+      .filter((c) => {
+        const name = c.name || c.Name;
+        const handle = c.handle || c.Handle || c.profile_link || c.profileLink;
+        return name?.toString().trim() && handle?.toString().trim();
+      })
+      .map((row: any) => {
+        const budget = parseCurrencyNumber(
+          row.counter_budget ?? row.Counter_budget
+            ?? row.counter ?? row.Counter
+            ?? row.target_budget ?? row.targetBudget ?? row.Target_Budget
+            ?? 0,
+        );
+        const agreed = parseCurrencyNumber(
+          row.final_agreed ?? row.final_and_agreed
+            ?? row.Final_Agreed ?? row.Final_And_Agreed
+            ?? row.agreed ?? row.Agreed
+            ?? row.locked_commercials ?? row.lockedCommercials
+            ?? 0,
+        );
+
+        return {
+          name: (row.name ?? row.Name ?? "").toString().trim(),
+          phone: (row.phone ?? row.Phone ?? row.phone_number ?? row.Contact ?? "").toString().trim(),
+          handle: (row.handle ?? row.Handle ?? row.profile_link ?? "").toString().replace(/^@/, "").trim(),
+          target_budget: budget,
+          locked_commercials: agreed,
+          counter_budget: budget,
+          final_agreed: agreed,
+          reel_link: row.reel_link ?? row.Reel_Link ?? row.reelLink ?? row["Reel Link"] ?? row["Live Link"] ?? null,
+          profile_link: row.profile_link ?? row.Profile_Link ?? row.profileLink ?? null,
+          status: row.status ?? row.Status ?? "Pending",
+          collab_type: row.collab_type ?? row.Collab_Type ?? null,
+        };
+      });
+  }, []);
+
   const replaceCreatorsWithSheet = useCallback(
     async (incoming: any[]) => {
       if (!activeCampaign.id) return;
 
-      // Sanitise every row: handle currency strings & column-name variants
-      const valid = incoming
-        .filter((c) => {
-          const name = c.name || c.Name;
-          const handle = c.handle || c.Handle || c.profile_link || c.profileLink;
-          return name?.toString().trim() && handle?.toString().trim();
-        })
-        .map((row: any) => {
-          const budget = parseCurrencyNumber(
-            row.counter_budget ?? row.Counter_budget
-              ?? row.counter ?? row.Counter
-              ?? row.target_budget ?? row.targetBudget ?? row.Target_Budget
-              ?? 0,
-          );
-          const agreed = parseCurrencyNumber(
-            row.final_agreed ?? row.final_and_agreed
-              ?? row.Final_Agreed ?? row.Final_And_Agreed
-              ?? row.agreed ?? row.Agreed
-              ?? row.locked_commercials ?? row.lockedCommercials
-              ?? 0,
-          );
-
-          return {
-            name: (row.name ?? row.Name ?? "").toString().trim(),
-            phone: (row.phone ?? row.Phone ?? row.phone_number ?? row.Contact ?? "").toString().trim(),
-            handle: (row.handle ?? row.Handle ?? row.profile_link ?? "").toString().replace(/^@/, "").trim(),
-            target_budget: budget,
-            locked_commercials: agreed,
-            counter_budget: budget,
-            final_agreed: agreed,
-            reel_link: row.reel_link ?? row.Reel_Link ?? row.reelLink ?? row["Reel Link"] ?? row["Live Link"] ?? null,
-            profile_link: row.profile_link ?? row.Profile_Link ?? row.profileLink ?? null,
-            status: row.status ?? row.Status ?? "Pending",
-            collab_type: row.collab_type ?? row.Collab_Type ?? null,
-          };
-        });
+      const valid = sanitizeIncomingRows(incoming);
 
       const { creators: saved } = await api<{ creators: any[] }>(
         `/campaigns/${activeCampaign.id}/creators`,
@@ -264,7 +267,48 @@ export function useCampaigns() {
       );
       setSelected(new Set());
     },
-    [activeCampaign.id],
+    [activeCampaign.id, sanitizeIncomingRows],
+  );
+
+  /** Append creators to the active campaign, skipping duplicates by handle. */
+  const appendCreatorsToSheet = useCallback(
+    async (incoming: any[]): Promise<{ added: number; duplicates: number; total: number }> => {
+      if (!activeCampaign.id) return { added: 0, duplicates: 0, total: 0 };
+
+      const valid = sanitizeIncomingRows(incoming);
+
+      // Build a set of existing handles for deduplication
+      const existingHandles = new Set(
+        activeCampaign.creators
+          .filter((c) => !c.removed_reason)
+          .map((c) => c.handle.toLowerCase().trim()),
+      );
+
+      const newCreators = valid.filter((c) => !existingHandles.has(c.handle.toLowerCase().trim()));
+      const duplicates = valid.length - newCreators.length;
+
+      // Insert each new creator individually via the POST endpoint
+      for (const creator of newCreators) {
+        await api<{ creator: any }>("/creators", {
+          method: "POST",
+          body: JSON.stringify({ ...creator, campaign_id: activeCampaign.id }),
+        });
+      }
+
+      // Refresh the campaign's creators
+      const json = await api<{ creators: any[] }>(
+        `/campaigns/${activeCampaign.id}/creators`,
+      );
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === activeCampaign.id ? { ...c, creators: json.creators } : c,
+        ),
+      );
+      setSelected(new Set());
+
+      return { added: newCreators.length, duplicates, total: valid.length };
+    },
+    [activeCampaign.id, sanitizeIncomingRows],
   );
 
   const addCreator = useCallback(
@@ -381,6 +425,7 @@ export function useCampaigns() {
     deleteCampaign,
     switchCampaign,
     replaceCreatorsWithSheet,
+    appendCreatorsToSheet,
     addCreator,
     updateCreator,
     removeCreator,

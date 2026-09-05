@@ -60,6 +60,7 @@ export default function DashboardPage() {
     deleteCampaign,
     switchCampaign,
     replaceCreatorsWithSheet,
+    appendCreatorsToSheet,
     addCreator,
     updateCreator,
     removeCreator,
@@ -342,6 +343,17 @@ export default function DashboardPage() {
               throw error;
             }
           }}
+          onAppend={async (newCreators) => {
+            try {
+              console.log("CSV append payload", { creators: newCreators });
+              return await appendCreatorsToSheet(newCreators);
+            } catch (error) {
+              console.error("CSV append failed", error);
+              throw error;
+            }
+          }}
+          existingCreators={creators}
+          removedCreators={removedCreators}
           onClose={() => setModal(null)}
         />
       )}

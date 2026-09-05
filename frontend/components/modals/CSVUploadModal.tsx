@@ -4,22 +4,41 @@ import { useState, useCallback, useRef } from "react";
 import { CreatorCreate } from "@/lib/types";
 import { parseCSVFile, downloadSampleCSV } from "@/lib/csv";
 import { Button } from "@/components/ui/Button";
-import { X, Upload, FileText, CheckCircle, AlertCircle, Download, Table2, Globe, ChevronDown, HelpCircle } from "lucide-react";
+import { X, Upload, FileText, CheckCircle, AlertCircle, Download, Table2, Globe, ChevronDown, HelpCircle, Plus, RefreshCw, UserPlus, Copy } from "lucide-react";
 import { clsx } from "clsx";
+
+interface GalleryCreator {
+  id: string;
+  handle: string;
+  phone: string;
+  profile_link?: string | null;
+}
 
 interface CSVUploadModalProps {
   onImport: (creators: CreatorCreate[]) => Promise<void>;
+  onAppend?: (creators: CreatorCreate[]) => Promise<{ added: number; duplicates: number; total: number }>;
+  existingCreators?: GalleryCreator[];
+  removedCreators?: GalleryCreator[];
   onClose: () => void;
 }
 
-type Step = "upload" | "preview" | "importing" | "done";
+type Step = "upload" | "preview" | "choose" | "importing" | "done";
 type SourceTab = "csv" | "sheets";
+type ImportMode = "replace" | "append" | null;
 
-export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
+interface ImportResult {
+  added: number;
+  duplicates: number;
+  total: number;
+}
+
+export function CSVUploadModal({ onImport, onAppend, existingCreators = [], removedCreators = [], onClose }: CSVUploadModalProps) {
   const [sourceTab, setSourceTab] = useState<SourceTab>("csv");
   const [step, setStep] = useState<Step>("upload");
   const [parsed, setParsed] = useState<CreatorCreate[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [importMode, setImportMode] = useState<ImportMode>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   // CSV state
   const [dragging, setDragging] = useState(false);
@@ -38,6 +57,8 @@ export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
   const [useManualEntry, setUseManualEntry] = useState(false);
   const [showApiKeyHint, setShowApiKeyHint] = useState(false);
 
+  const hasExistingCreators = existingCreators.length > 0;
+
   const reset = () => {
     setStep("upload");
     setParsed([]);
@@ -53,7 +74,49 @@ export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
     setUseManualEntry(false);
     setShowApiKeyHint(false);
     setUseManualEntry(false);
+    setImportMode(null);
+    setImportResult(null);
   };
+
+  /** Extract contacts from gallery when phone is missing */
+  const enrichFromGallery = useCallback((creators: CreatorCreate[]): CreatorCreate[] => {
+    if (removedCreators.length === 0) return creators;
+
+    // Build lookup maps from gallery
+    const galleryByHandle = new Map<string, GalleryCreator>();
+    const galleryByProfile = new Map<string, GalleryCreator>();
+
+    for (const gc of removedCreators) {
+      const handle = gc.handle?.toLowerCase().replace(/^@/, "").trim();
+      if (handle) galleryByHandle.set(handle, gc);
+      const profile = gc.profile_link?.toLowerCase().trim();
+      if (profile) galleryByProfile.set(profile, gc);
+    }
+
+    return creators.map((c) => {
+      if (c.phone?.trim()) return c; // already has phone
+
+      // Try matching by handle
+      const handle = c.handle?.toLowerCase().replace(/^@/, "").trim();
+      if (handle && galleryByHandle.has(handle)) {
+        const match = galleryByHandle.get(handle)!;
+        if (match.phone?.trim()) {
+          return { ...c, phone: match.phone.trim() };
+        }
+      }
+
+      // Try matching by profile link
+      const profile = c.profile_link?.toLowerCase().trim();
+      if (profile && galleryByProfile.has(profile)) {
+        const match = galleryByProfile.get(profile)!;
+        if (match.phone?.trim()) {
+          return { ...c, phone: match.phone.trim() };
+        }
+      }
+
+      return c;
+    });
+  }, [removedCreators]);
 
   // ─── CSV Handlers ──────────────────────────────────────────────────────────
 
@@ -72,11 +135,16 @@ export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
         return;
       }
       setParsed(valid);
-      setStep("preview");
+      // If campaign already has creators, show choose step; otherwise go to preview
+      if (hasExistingCreators) {
+        setStep("choose");
+      } else {
+        setStep("preview");
+      }
     } catch {
       setError("Failed to parse CSV. Please check the file format.");
     }
-  }, []);
+  }, [hasExistingCreators]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -206,7 +274,12 @@ export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
       }
 
       setParsed(valid);
-      setStep("preview");
+      // If campaign already has creators, show choose step; otherwise go to preview
+      if (hasExistingCreators) {
+        setStep("choose");
+      } else {
+        setStep("preview");
+      }
     } catch {
       setError("Failed to import sheet data. Please try again.");
       setStep("upload");
@@ -215,14 +288,26 @@ export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
 
   // ─── Common Import ───────────────────────────────────────────────────────────
 
-  const handleImport = async () => {
+  const handleImport = async (mode: "replace" | "append") => {
     setStep("importing");
+    setImportMode(mode);
+    setError(null);
+
     try {
-      await onImport(parsed);
+      if (mode === "append" && onAppend) {
+        // Enrich creators with gallery contacts before appending
+        const enriched = enrichFromGallery(parsed);
+        const result = await onAppend(enriched);
+        setImportResult(result);
+      } else {
+        // Replace mode: enrich with gallery contacts too
+        const enriched = enrichFromGallery(parsed);
+        await onImport(enriched);
+      }
       setStep("done");
     } catch {
       setError("Import failed. Please try again.");
-      setStep("preview");
+      setStep("choose");
     }
   };
 
@@ -470,6 +555,83 @@ export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
             </div>
           )}
 
+          {/* ─── Choose Step: Append or Replace ─────────────────────────────── */}
+          {step === "choose" && (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-sm text-indigo-700">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>
+                  <strong>{parsed.length} creator{parsed.length !== 1 ? "s" : ""}</strong> parsed from{" "}
+                  <strong>{sourceTab === "csv" ? fileName : selectedTab}</strong>
+                </span>
+              </div>
+
+              <div className="p-4 rounded-xl border border-amber-200 bg-amber-50">
+                <p className="text-sm font-semibold text-amber-800 mb-1">
+                  This campaign already has {existingCreators.length} creator{existingCreators.length !== 1 ? "s" : ""}
+                </p>
+                <p className="text-xs text-amber-700">
+                  How would you like to import the new creators?
+                </p>
+              </div>
+
+              {/* Mode selection */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setImportMode("append"); setStep("preview"); }}
+                  className={clsx(
+                    "flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer",
+                    importMode === "append"
+                      ? "border-emerald-400 bg-emerald-50"
+                      : "border-slate-200 hover:border-emerald-300 hover:bg-slate-50"
+                  )}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                    <Plus className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-slate-900">Append</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Add new creators only. Duplicates skipped.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => { setImportMode("replace"); setStep("preview"); }}
+                  className={clsx(
+                    "flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer",
+                    importMode === "replace"
+                      ? "border-amber-400 bg-amber-50"
+                      : "border-slate-200 hover:border-amber-300 hover:bg-slate-50"
+                  )}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                    <RefreshCw className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-slate-900">Replace All</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Remove existing creators and import fresh.
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {error}
+                </div>
+              )}
+
+              <Button variant="secondary" onClick={() => { reset(); }} fullWidth>
+                Back
+              </Button>
+            </div>
+          )}
+
+          {/* ─── Preview Step ──────────────────────────────────────────────── */}
           {step === "preview" && (
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-2 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-sm text-indigo-700">
@@ -479,6 +641,16 @@ export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
                   <strong>{sourceTab === "csv" ? fileName : selectedTab}</strong>
                 </span>
               </div>
+
+              {/* Show gallery enrichment info */}
+              {removedCreators.length > 0 && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 text-sm text-blue-700">
+                  <UserPlus className="w-4 h-4 shrink-0" />
+                  <span>
+                    Creators without phone numbers will be matched against the gallery ({removedCreators.length} creators) to fill in contact details.
+                  </span>
+                </div>
+              )}
 
               {/* Preview table */}
               <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-100">
@@ -513,32 +685,75 @@ export function CSVUploadModal({ onImport, onClose }: CSVUploadModalProps) {
               </div>
 
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => { reset(); }} fullWidth>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    if (hasExistingCreators) {
+                      setImportMode(null);
+                      setStep("choose");
+                    } else {
+                      reset();
+                    }
+                  }}
+                  fullWidth
+                >
                   Back
                 </Button>
-                <Button variant="primary" onClick={handleImport} fullWidth>
-                  Import {parsed.length} Creator{parsed.length !== 1 ? "s" : ""}
+                <Button
+                  variant="primary"
+                  onClick={() => handleImport(importMode === "append" ? "append" : "replace")}
+                  fullWidth
+                >
+                  {importMode === "append"
+                    ? `Append ${parsed.length} New Creator${parsed.length !== 1 ? "s" : ""}`
+                    : `Replace & Import ${parsed.length} Creator${parsed.length !== 1 ? "s" : ""}`}
                 </Button>
               </div>
             </div>
           )}
 
+          {/* ─── Importing Step ─────────────────────────────────────────── */}
           {step === "importing" && (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
               <div className="w-12 h-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
-              <p className="text-sm text-slate-600 font-medium">Importing creators…</p>
+              <p className="text-sm text-slate-600 font-medium">
+                {importMode === "append" ? "Appending new creators…" : "Importing creators…"}
+              </p>
+              {importMode === "append" && (
+                <p className="text-xs text-slate-400">Checking for duplicates and enriching contacts…</p>
+              )}
             </div>
           )}
 
+          {/* ─── Done Step ──────────────────────────────────────────────── */}
           {step === "done" && (
             <div className="flex flex-col items-center justify-center py-8 gap-3 text-center">
               <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
                 <CheckCircle className="w-7 h-7 text-emerald-600" />
               </div>
               <p className="text-base font-bold text-slate-900">Import Successful!</p>
-              <p className="text-sm text-slate-500">
-                {parsed.length} creator{parsed.length !== 1 ? "s" : ""} added to your campaign.
-              </p>
+
+              {importMode === "append" && importResult ? (
+                <div className="flex flex-col gap-2 w-full max-w-xs">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <span className="text-sm text-emerald-700">Added</span>
+                    <span className="text-sm font-bold text-emerald-800">{importResult.added}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <span className="text-sm text-amber-700">Duplicates (skipped)</span>
+                    <span className="text-sm font-bold text-amber-800">{importResult.duplicates}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-slate-100 border border-slate-200">
+                    <span className="text-sm text-slate-700">Total in CSV</span>
+                    <span className="text-sm font-bold text-slate-800">{importResult.total}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  {parsed.length} creator{parsed.length !== 1 ? "s" : ""} added to your campaign.
+                </p>
+              )}
+
               <Button variant="primary" onClick={onClose} className="mt-2">
                 View Dashboard
               </Button>
