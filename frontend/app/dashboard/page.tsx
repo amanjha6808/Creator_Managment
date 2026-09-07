@@ -15,7 +15,7 @@ import { DeleteCreatorModal } from "@/components/modals/DeleteCreatorModal";
 import { Button } from "@/components/ui/Button";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { Creator, CreatorStatus } from "@/lib/types";
-import { exportCommercialSavingsCSV } from "@/lib/csv";
+import { exportCommercialSavingsCSV, exportCampaignDataCSV } from "@/lib/csv";
 import { Search, Users, Image, Download, LogOut, Loader2, RefreshCw } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -102,9 +102,13 @@ export default function DashboardPage() {
     return matchSearch && matchStatus;
   });
 
-  // Export handler
+  // Export handlers
   const handleExport = () => {
     exportCommercialSavingsCSV(creators);
+  };
+
+  const handleExportData = () => {
+    exportCampaignDataCSV(creators);
   };
 
   // Sync contacts handler
@@ -213,6 +217,7 @@ export default function DashboardPage() {
           onUploadCSV={() => setModal("csv")}
           onAddCreator={() => setModal("addCreator")}
           onExport={handleExport}
+          onExportData={handleExportData}
           onSyncContacts={handleSyncContacts}
           onSyncing={syncing}
           onLogout={handleLogout}
@@ -270,6 +275,14 @@ export default function DashboardPage() {
                         onClick={handleExport}
                       >
                         Export Savings
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<Download className="w-3.5 h-3.5" />}
+                        onClick={handleExportData}
+                      >
+                        Export Data
                       </Button>
                     </div>
                   </div>

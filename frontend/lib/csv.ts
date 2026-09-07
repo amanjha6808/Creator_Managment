@@ -235,6 +235,27 @@ export function exportCommercialSavingsCSV(creators: Creator[]): void {
   downloadCSV(csv, "commercial_savings.csv");
 }
 
+// ─── Export Campaign Data CSV (Sr No., Name, Profile Link, Reel Link) ──────
+
+export function exportCampaignDataCSV(creators: Creator[]): void {
+  const rows = creators.map((c, i) => {
+    const cleanHandle = c.handle ? c.handle.replace(/^@/, "").trim() : "";
+    const profileLink =
+      c.profile_link ||
+      (cleanHandle ? `https://www.instagram.com/${cleanHandle}/` : "");
+
+    return {
+      "Sr No.": i + 1,
+      Name: c.name,
+      "Profile Link": profileLink,
+      "Reel Link": c.reel_link || "",
+    };
+  });
+
+  const csv = Papa.unparse(rows);
+  downloadCSV(csv, "campaign_data.csv");
+}
+
 // ─── Sample CSV Template ──────────────────────────────────────────────────────
 
 export function downloadSampleCSV(): void {

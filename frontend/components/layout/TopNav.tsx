@@ -16,6 +16,7 @@ interface TopNavProps {
   onUploadCSV: () => void;
   onAddCreator: () => void;
   onExport: () => void;
+  onExportData: () => void;
   onSyncContacts?: () => void;
   onSyncing?: boolean;
   onLogout?: () => void;
@@ -31,6 +32,7 @@ export function TopNav({
   onUploadCSV,
   onAddCreator,
   onExport,
+  onExportData,
   onSyncContacts,
   onSyncing,
   onLogout,
@@ -119,7 +121,17 @@ export function TopNav({
             icon={<Download className="w-3.5 h-3.5" />}
             onClick={onExport}
           >
-            <span className="hidden sm:inline">Export</span>
+            <span className="hidden sm:inline">Export Savings</span>
+          </Button>
+
+          {/* Export Campaign Data */}
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Download className="w-3.5 h-3.5" />}
+            onClick={onExportData}
+          >
+            <span className="hidden sm:inline">Export Data</span>
           </Button>
 
           {/* Upload CSV */}
