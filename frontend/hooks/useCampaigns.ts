@@ -69,6 +69,10 @@ export function useCampaigns() {
   const [hydrated, setHydrated] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // The creator gallery pool — imported creators live in the hidden internal
+  // "Gallery" campaign, fetched separately from the visible campaign list.
+  const [galleryPool, setGalleryPool] = useState<(Creator & { _campaignName?: string })[]>([]);
+
   // ─── Load campaigns from API on mount ────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +129,23 @@ export function useCampaigns() {
     return () => { cancelled = true; };
   }, []);
 
+  // ─── Fetch the creator gallery pool (hidden internal "Gallery" campaign) ──
+  const loadGalleryPool = useCallback(async () => {
+    try {
+      const json = await api<{ creators: any[] }>("/gallery");
+      setGalleryPool(
+        (json.creators ?? []).map((cr) => ({ ...cr, _campaignName: "Gallery" })),
+      );
+    } catch {
+      // Keep the current pool if the fetch fails — the gallery tab shouldn't break.
+    }
+  }, []);
+
+  // Load the gallery pool on mount
+  useEffect(() => {
+    loadGalleryPool();
+  }, [loadGalleryPool]);
+
   // ─── Re-fetch all campaigns and their creators ────────────────────────────
   const reloadCampaigns = useCallback(async () => {
     try {
@@ -150,10 +171,12 @@ export function useCampaigns() {
       setActiveCampaignId((prev) =>
         withCreators.some((c) => c.id === prev) ? prev : withCreators[0].id,
       );
+      // Refresh the gallery pool too, so freshly imported creators show up.
+      await loadGalleryPool();
     } catch (err: any) {
       console.error("[useCampaigns] Failed to reload campaigns:", err);
     }
-  }, []);
+  }, [loadGalleryPool]);
 
   // ─── Re-fetch creators for the currently active campaign ─────────────────
   const refreshActiveCreators = useCallback(
@@ -183,14 +206,16 @@ export function useCampaigns() {
     ? activeCampaign.creators.filter((c) => !c.removed_reason)
     : [];
 
-  const removedCreators = campaigns
-    .flatMap((c) => c.creators.filter((cr) => cr.removed_reason))
-    .map((cr) => {
-      const camp = campaigns.find((c) =>
-        c.creators.some((cc) => cc.id === cr.id),
-      );
-      return { ...cr, _campaignName: camp?.name ?? "Unknown" };
-    });
+  const removedCreators: (Creator & { _campaignName?: string })[] = [
+    // Imported pool (hidden internal "Gallery" campaign) + creators removed
+    // from any visible campaign pipeline.
+    ...galleryPool,
+    ...campaigns.flatMap((c) =>
+      c.creators
+        .filter((cr) => cr.removed_reason)
+        .map((cr) => ({ ...cr, _campaignName: c.name })),
+    ),
+  ];
 
   const allCreatorsAcrossCampaigns = campaigns.flatMap((c) =>
     c.creators.filter((cr) => !cr.removed_reason),

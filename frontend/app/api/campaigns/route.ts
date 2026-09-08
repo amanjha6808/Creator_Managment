@@ -27,10 +27,13 @@ export async function GET(request: NextRequest) {
     }
 
     const db = getSupabase();
+    // Exclude the internal "Gallery" campaign — it is a hidden storage pool for
+    // imported creators (surfaced via GET /api/gallery), not a real campaign.
     const { data, error } = await db
       .from("campaigns")
       .select("*")
       .eq("login_id", loginId)
+      .neq("name", "Gallery")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -66,6 +69,12 @@ export async function POST(request: NextRequest) {
     if (!name) {
       return NextResponse.json(
         { error: "Campaign name is required." },
+        { status: 400, headers: CORS_HEADERS },
+      );
+    }
+    if (name.toLowerCase() === "gallery") {
+      return NextResponse.json(
+        { error: "\"Gallery\" is a reserved name for the internal creator pool and can't be used for a campaign." },
         { status: 400, headers: CORS_HEADERS },
       );
     }

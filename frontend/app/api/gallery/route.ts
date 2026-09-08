@@ -4,7 +4,7 @@ import { extractHandleFromProfile } from "@/lib/csv";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, x-login-id",
 };
 
@@ -50,6 +50,60 @@ async function ensureGalleryCampaign(
     throw new Error(error?.message || "Failed to create the Gallery pool.");
   }
   return created.id;
+}
+
+/** List the creator gallery pool (the internal "Gallery" campaign) — owner only. */
+export async function GET(request: NextRequest) {
+  try {
+    const loginId = getLoginId(request);
+    if (!loginId) {
+      return NextResponse.json(
+        { error: "Not authenticated." },
+        { status: 401, headers: CORS_HEADERS },
+      );
+    }
+
+    const db = getSupabase();
+    const { data: campaign } = await db
+      .from("campaigns")
+      .select("id")
+      .eq("login_id", loginId)
+      .eq("name", "Gallery")
+      .maybeSingle();
+
+    if (!campaign) {
+      return NextResponse.json({ creators: [] }, { headers: CORS_HEADERS });
+    }
+
+    const { data, error } = await db
+      .from("creators")
+      .select("*")
+      .eq("campaign_id", campaign.id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500, headers: CORS_HEADERS },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        creators: (data ?? []).map((cr: any) => ({
+          ...cr,
+          _campaignName: "Gallery",
+        })),
+      },
+      { headers: CORS_HEADERS },
+    );
+  } catch (err: any) {
+    console.error("[GET /api/gallery]", err?.message);
+    return NextResponse.json(
+      { error: err?.message || "Internal server error" },
+      { status: 500, headers: CORS_HEADERS },
+    );
+  }
 }
 
 /** Bulk-import creators into the gallery pool — owner only. */
