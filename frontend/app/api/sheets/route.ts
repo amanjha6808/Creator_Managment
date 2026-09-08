@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Request body must include a 'url' field." }, { status: 400, headers: CORS_HEADERS });
     }
 
-    const { url, action, tabName } = body;
+    const { url, action, tabName, gid: requestedGid } = body;
 
     // Validate URL
     const validation = validateSheetUrl(url);
@@ -219,10 +219,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "import") {
-      // Resolve gid: from tabName lookup > url-embedded > default (0)
+      // Resolve gid: explicit gid (from a prior list-tabs call) > tabName lookup > url-embedded > default (0)
       let gid = "0";
 
-      if (tabName) {
+      if (requestedGid != null && /^\d+$/.test(String(requestedGid))) {
+        gid = String(requestedGid);
+      } else if (tabName) {
         // Try to find the tab name via API first
         if (apiKey) {
           const apiResult = await listSheetTabsViaApi(sheetId, apiKey);

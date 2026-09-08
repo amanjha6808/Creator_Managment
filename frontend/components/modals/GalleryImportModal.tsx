@@ -20,12 +20,17 @@ interface GalleryImportModalProps {
 type Step = "upload" | "preview" | "importing" | "done";
 type SourceTab = "csv" | "sheets";
 
+/** Creators sent to the gallery API per request — larger payloads are split
+ *  into batches so the progress bar can report real, incremental progress. */
+const BATCH_SIZE = 50;
+
 export function GalleryImportModal({ onImport, onClose }: GalleryImportModalProps) {
   const [sourceTab, setSourceTab] = useState<SourceTab>("csv");
   const [step, setStep] = useState<Step>("upload");
   const [rows, setRows] = useState<GalleryImportRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GalleryImportResult | null>(null);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
 
   // CSV state
   const [dragging, setDragging] = useState(false);
@@ -36,6 +41,7 @@ export function GalleryImportModal({ onImport, onClose }: GalleryImportModalProp
   const [sheetUrl, setSheetUrl] = useState("");
   const [fetchingTabs, setFetchingTabs] = useState(false);
   const [scannedTabs, setScannedTabs] = useState(0);
+  const [scanTotal, setScanTotal] = useState(0);
   const [tabErrors, setTabErrors] = useState<string[]>([]);
   const [showHelp, setShowHelp] = useState(false);
 
@@ -46,9 +52,11 @@ export function GalleryImportModal({ onImport, onClose }: GalleryImportModalProp
     setFileName("");
     setSheetUrl("");
     setScannedTabs(0);
+    setScanTotal(0);
     setTabErrors([]);
     setShowHelp(false);
     setResult(null);
+    setImportProgress(null);
   };
 
   // ─── CSV handler ────────────────────────────────────────────────────────────
@@ -94,37 +102,63 @@ export function GalleryImportModal({ onImport, onClose }: GalleryImportModalProp
     setError(null);
     setFetchingTabs(true);
     setScannedTabs(0);
+    setScanTotal(0);
     setTabErrors([]);
 
     try {
-      const res = await fetch("/api/sheets", {
+      // Step 1: list every worksheet tab
+      const listRes = await fetch("/api/sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: sheetUrl.trim(), action: "import-all" }),
+        body: JSON.stringify({ url: sheetUrl.trim(), action: "list-tabs" }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to fetch the spreadsheet.");
+      const listData = await listRes.json();
+      if (!listRes.ok) {
+        setError(listData.error || "Failed to fetch the spreadsheet.");
         return;
       }
 
-      const tabs: { name: string; csvData: string }[] = data.tabs ?? [];
+      const tabs: string[] = listData.tabs ?? [];
+      const gids: Record<string, string> = listData.gids ?? {};
       if (tabs.length === 0) {
         setError("No data found in the spreadsheet.");
         return;
       }
 
-      setScannedTabs(tabs.length);
-      if (Array.isArray(data.errors) && data.errors.length > 0) {
-        setTabErrors(data.errors.map((e: any) => e.name));
+      setScanTotal(tabs.length);
+
+      // Step 2: fetch each tab one at a time so the progress bar can fill in
+      const errors: string[] = [];
+      const csvs: string[] = [];
+      for (let i = 0; i < tabs.length; i++) {
+        setScannedTabs(i + 1);
+        const importRes = await fetch("/api/sheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: sheetUrl.trim(),
+            action: "import",
+            gid: gids[tabs[i]],
+          }),
+        });
+        const importData = await importRes.json();
+        if (!importRes.ok || !importData.csvData) {
+          errors.push(tabs[i]);
+          continue;
+        }
+        csvs.push(importData.csvData);
+      }
+
+      if (errors.length > 0) {
+        setTabErrors(errors);
       }
 
       // Parse every tab and merge the results
       let all: GalleryImportRow[] = [];
-      for (const tab of tabs) {
-        if (!tab.csvData || !tab.csvData.trim()) continue;
-        const parsed = await parseGalleryCSV(tab.csvData);
+      for (const csvData of csvs) {
+        if (!csvData || !csvData.trim()) continue;
+        const parsed = await parseGalleryCSV(csvData);
         all = all.concat(parsed);
       }
 
@@ -149,12 +183,29 @@ export function GalleryImportModal({ onImport, onClose }: GalleryImportModalProp
   const handleImport = async () => {
     setStep("importing");
     setError(null);
+    setImportProgress({ done: 0, total: rows.length });
     try {
-      const res = await onImport(rows);
-      setResult(res);
+      let added = 0;
+      let duplicates = 0;
+      let total = 0;
+      // Send creators in batches so the progress bar fills in as each batch
+      // finishes instead of waiting on one giant request.
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const chunk = rows.slice(i, i + BATCH_SIZE);
+        const res = await onImport(chunk);
+        added += res.added;
+        duplicates += res.duplicates;
+        total += res.total;
+        setImportProgress({
+          done: Math.min(i + chunk.length, rows.length),
+          total: rows.length,
+        });
+      }
+      setResult({ added, duplicates, total });
       setStep("done");
     } catch (err: any) {
       setError(err?.message || "Import failed. Please try again.");
+      setImportProgress(null);
       setStep("preview");
     }
   };
@@ -284,6 +335,27 @@ export function GalleryImportModal({ onImport, onClose }: GalleryImportModalProp
                 {fetchingTabs ? "Scanning all tabs…" : "Scan Entire Spreadsheet (All Tabs)"}
               </Button>
 
+              {fetchingTabs && scanTotal > 0 && (
+                <div className="w-full flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">
+                      Scanning tab {Math.min(scannedTabs, scanTotal)} of {scanTotal}
+                    </span>
+                    <span className="text-indigo-600 font-semibold">
+                      {Math.round((Math.min(scannedTabs, scanTotal) / scanTotal) * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-indigo-600 transition-all duration-300 ease-out"
+                      style={{
+                        width: `${(Math.min(scannedTabs, scanTotal) / scanTotal) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-sm text-indigo-700">
                 <HelpCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>
@@ -406,9 +478,31 @@ export function GalleryImportModal({ onImport, onClose }: GalleryImportModalProp
 
           {/* ─── Importing Step ────────────────────────────────────────────── */}
           {step === "importing" && (
-            <div className="flex flex-col items-center justify-center py-10 gap-3">
+            <div className="flex flex-col items-center justify-center py-10 gap-4">
               <div className="w-12 h-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
               <p className="text-sm text-slate-600 font-medium">Adding to gallery pool…</p>
+
+              {importProgress && importProgress.total > 0 && (
+                <div className="w-full max-w-xs flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">
+                      Adding {importProgress.done} of {importProgress.total} creators
+                    </span>
+                    <span className="text-indigo-600 font-semibold">
+                      {Math.round((importProgress.done / importProgress.total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-indigo-600 transition-all duration-300 ease-out"
+                      style={{
+                        width: `${(importProgress.done / importProgress.total) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <p className="text-xs text-slate-400">Checking duplicates and saving contacts.</p>
             </div>
           )}
