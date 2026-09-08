@@ -254,7 +254,72 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, csvData, gid }, { headers: CORS_HEADERS });
     }
 
-    return NextResponse.json({ error: "Invalid action. Use 'list-tabs' or 'import'." }, { status: 400, headers: CORS_HEADERS });
+    if (action === "import-all") {
+      // Scan EVERY worksheet tab in the spreadsheet and pull CSV data from each.
+      let tabsInfo: { tabs: string[]; gids: Record<string, string> } | null = null;
+
+      // Strategy 1: Google Sheets API v4 with API key (REAL tab names)
+      if (apiKey) {
+        tabsInfo = await listSheetTabsViaApi(sheetId, apiKey);
+      }
+
+      // Strategy 2: Probing via CSV export (generic names, works without API key)
+      if (!tabsInfo || tabsInfo.tabs.length === 0) {
+        tabsInfo = await listSheetTabsViaProbing(sheetId);
+      }
+
+      if (!tabsInfo || tabsInfo.tabs.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "No sheet tabs found. Make sure the sheet is shared with 'Anyone with the link' " +
+              "(or set GOOGLE_SHEETS_API_KEY in .env.local for reliable tab detection).",
+            needsApiKey: !apiKey,
+          },
+          { status: 400, headers: CORS_HEADERS },
+        );
+      }
+
+      const tabs: { name: string; csvData: string }[] = [];
+      const errors: { name: string; error: string }[] = [];
+
+      for (const tab of tabsInfo.tabs) {
+        const gid = tabsInfo.gids[tab] ?? "0";
+        try {
+          const csvData = await importSheetData(sheetId, gid);
+          tabs.push({ name: tab, csvData });
+        } catch (err: any) {
+          errors.push({ name: tab, error: err?.message || "Failed to fetch this tab." });
+        }
+      }
+
+      if (tabs.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Could not read any sheet tab. " + (errors[0]?.error || ""),
+          },
+          { status: 500, headers: CORS_HEADERS },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          tabs,
+          tabCount: tabs.length,
+          errors: errors.length > 0 ? errors : undefined,
+          needsApiKey: !apiKey,
+        },
+        { headers: CORS_HEADERS },
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Invalid action. Use 'list-tabs', 'import', or 'import-all'." },
+      { status: 400, headers: CORS_HEADERS },
+    );
   } catch (err: any) {
     console.error("[Sheets API]", err);
     return NextResponse.json(

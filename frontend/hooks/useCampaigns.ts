@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Creator, CreatorCreate, CreatorUpdate, CampaignSummary } from "@/lib/types";
+import { GalleryImportRow, extractHandleFromProfile } from "@/lib/csv";
 import { generateId } from "@/lib/id";
 
 export interface Campaign {
@@ -122,6 +123,36 @@ export function useCampaigns() {
 
     load();
     return () => { cancelled = true; };
+  }, []);
+
+  // ─── Re-fetch all campaigns and their creators ────────────────────────────
+  const reloadCampaigns = useCallback(async () => {
+    try {
+      const json = await api<{ campaigns: any[] }>("/campaigns");
+      if (json.campaigns.length === 0) {
+        setCampaigns([]);
+        setActiveCampaignId("");
+        return;
+      }
+      const withCreators = await Promise.all(
+        json.campaigns.map(async (c: any) => {
+          try {
+            const crJson = await api<{ creators: any[] }>(
+              `/campaigns/${c.id}/creators`,
+            );
+            return { ...c, creators: crJson.creators ?? [] } as Campaign;
+          } catch {
+            return { ...c, creators: [] } as Campaign;
+          }
+        }),
+      );
+      setCampaigns(withCreators);
+      setActiveCampaignId((prev) =>
+        withCreators.some((c) => c.id === prev) ? prev : withCreators[0].id,
+      );
+    } catch (err: any) {
+      console.error("[useCampaigns] Failed to reload campaigns:", err);
+    }
   }, []);
 
   // ─── Re-fetch creators for the currently active campaign ─────────────────
@@ -277,14 +308,31 @@ export function useCampaigns() {
 
       const valid = sanitizeIncomingRows(incoming);
 
-      // Build a set of existing handles for deduplication
-      const existingHandles = new Set(
-        activeCampaign.creators
-          .filter((c) => !c.removed_reason)
-          .map((c) => c.handle.toLowerCase().trim()),
-      );
+      // Build identity sets from existing creators: profile username
+      // (handle or extracted from the profile link) and contact phone.
+      const existingUsernames = new Set<string>();
+      const existingPhones = new Set<string>();
+      for (const c of activeCampaign.creators.filter((cr) => !cr.removed_reason)) {
+        const username = extractHandleFromProfile(c.handle || c.profile_link || "")
+          .toLowerCase()
+          .replace(/^@/, "")
+          .trim();
+        const phone = (c.phone ?? "").replace(/\D/g, "");
+        if (username) existingUsernames.add(username);
+        if (phone) existingPhones.add(phone);
+      }
 
-      const newCreators = valid.filter((c) => !existingHandles.has(c.handle.toLowerCase().trim()));
+      // Skip repeated profiles: same username (from handle or profile link) or same phone
+      const newCreators = valid.filter((c) => {
+        const username = extractHandleFromProfile(c.handle || c.profile_link || "")
+          .toLowerCase()
+          .replace(/^@/, "")
+          .trim();
+        const phone = (c.phone ?? "").replace(/\D/g, "");
+        if (username && existingUsernames.has(username)) return false;
+        if (phone && existingPhones.has(phone)) return false;
+        return true;
+      });
       const duplicates = valid.length - newCreators.length;
 
       // Insert each new creator individually via the POST endpoint
@@ -466,6 +514,24 @@ export function useCampaigns() {
     [activeCampaign.creators, allCreatorsAcrossCampaigns, updateCreator],
   );
 
+  /** Bulk-import profile links & contacts into the gallery pool, then refresh. */
+  const importGallery = useCallback(
+    async (rows: GalleryImportRow[]) => {
+      const res = await api<{
+        added: number;
+        duplicates: number;
+        total: number;
+        creators: any[];
+      }>("/gallery", {
+        method: "POST",
+        body: JSON.stringify({ creators: rows }),
+      });
+      await reloadCampaigns();
+      return { added: res.added, duplicates: res.duplicates, total: res.total };
+    },
+    [reloadCampaigns],
+  );
+
   return {
     campaigns,
     activeCampaign,
@@ -486,6 +552,7 @@ export function useCampaigns() {
     updateCreator,
     removeCreator,
     syncContacts,
+    importGallery,
     toggleSelect,
     selectAll,
     deselectAll,

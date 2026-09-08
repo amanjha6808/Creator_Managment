@@ -9,6 +9,7 @@ import { CreatorTable } from "@/components/dashboard/CreatorTable";
 import { CreatorCards } from "@/components/dashboard/CreatorCards";
 import { CreatorGalleryGrid } from "@/components/dashboard/CreatorGalleryGrid";
 import { CSVUploadModal } from "@/components/modals/CSVUploadModal";
+import { GalleryImportModal } from "@/components/modals/GalleryImportModal";
 import { AddCreatorModal } from "@/components/modals/AddCreatorModal";
 import { EditCreatorModal } from "@/components/modals/EditCreatorModal";
 import { DeleteCreatorModal } from "@/components/modals/DeleteCreatorModal";
@@ -16,10 +17,10 @@ import { Button } from "@/components/ui/Button";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { Creator, CreatorStatus } from "@/lib/types";
 import { exportCommercialSavingsCSV, exportCampaignDataCSV } from "@/lib/csv";
-import { Search, Users, Image, Download, LogOut, Loader2, RefreshCw } from "lucide-react";
+import { Search, Users, Image, Download, Upload, LogOut, Loader2, RefreshCw } from "lucide-react";
 import { clsx } from "clsx";
 
-type Modal = "csv" | "addCreator" | null;
+type Modal = "csv" | "galleryImport" | "addCreator" | null;
 type Tab = "dashboard" | "gallery";
 
 export default function DashboardPage() {
@@ -67,6 +68,7 @@ export default function DashboardPage() {
     updateCreator,
     removeCreator,
     syncContacts,
+    importGallery,
     toggleSelect,
     selectAll,
     deselectAll,
@@ -234,6 +236,16 @@ export default function DashboardPage() {
                 <span className="ml-1 px-2 py-0.5 rounded-full bg-slate-100 text-xs text-slate-500 font-medium">
                   {removedCreators.length}
                 </span>
+                <div className="ml-auto">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Upload className="w-3.5 h-3.5" />}
+                    onClick={() => setModal("galleryImport")}
+                  >
+                    <span className="hidden sm:inline">Import</span>
+                  </Button>
+                </div>
               </div>
               <div className="p-4 md:p-6">
                 <CreatorGalleryGrid creators={removedCreators} />
@@ -372,6 +384,13 @@ export default function DashboardPage() {
       </div>
 
       {/* Modals */}
+      {modal === "galleryImport" && (
+        <GalleryImportModal
+          onImport={importGallery}
+          onClose={() => setModal(null)}
+        />
+      )}
+
       {modal === "csv" && (
         <CSVUploadModal
           onImport={async (newCreators) => {

@@ -740,7 +740,7 @@ export function CSVUploadModal({ onImport, onAppend, existingCreators = [], remo
                     <span className="text-sm font-bold text-emerald-800">{importResult.added}</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 border border-amber-200">
-                    <span className="text-sm text-amber-700">Duplicates (skipped)</span>
+                    <span className="text-sm text-amber-700">Repeated (skipped)</span>
                     <span className="text-sm font-bold text-amber-800">{importResult.duplicates}</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-lg bg-slate-100 border border-slate-200">

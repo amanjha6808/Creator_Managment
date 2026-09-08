@@ -85,7 +85,7 @@ function normalizeStatus(value: string | undefined): CreatorStatus {
   return (raw as CreatorStatus) || "Pending";
 }
 
-function extractHandleFromProfile(value: string | undefined): string {
+export function extractHandleFromProfile(value: string | undefined): string {
   if (!value) return "";
   const cleaned = value.trim();
   const atMatch = cleaned.match(/@([A-Za-z0-9_.]+)/);
@@ -194,6 +194,195 @@ export function parseCSVFile(file: File): Promise<CreatorCreate[]> {
       error: reject,
     });
   });
+}
+
+// ─── Gallery Import Parsing ────────────────────────────────────────────────────
+// The gallery import is deliberately more lenient than the campaign CSV import:
+// it extracts whatever profile links and contacts exist in a sheet, even when
+// there is no dedicated header row or "Name" column.
+
+export interface GalleryImportRow {
+  name: string;
+  handle: string;
+  phone: string;
+  profile_link: string | null;
+}
+
+/** Normalize a profile value into a full http(s) URL, or null if not a URL. */
+function toProfileUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // Bare instagram handles / domains like "instagram.com/user" or "@user"
+  if (/^@/.test(trimmed)) return null;
+  if (trimmed.includes(".") && !trimmed.includes(" ")) {
+    return `https://${trimmed}`;
+  }
+  return null;
+}
+
+/** True when a cell looks like a phone number (6–15 digits, no more than 2 letters). */
+function looksLikePhone(cell: string): boolean {
+  const trimmed = cell.trim();
+  // Reject obvious dates like 2024-05-01 or 01/05/2024
+  if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(trimmed)) return false;
+  if (/^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/.test(trimmed)) return false;
+  const digits = cell.replace(/\D/g, "");
+  const letters = cell.replace(/[^A-Za-z]/g, "");
+  return digits.length >= 6 && digits.length <= 15 && letters.length <= 2;
+}
+
+/** Fallback: scan every cell for an instagram / profile-style URL. */
+function scanRowForProfile(row: Record<string, any>): string | null {
+  for (const [key, value] of Object.entries(row)) {
+    if (value == null) continue;
+    const cell = String(value).trim();
+    if (!cell) continue;
+    const lower = cell.toLowerCase();
+    if (
+      lower.includes("instagram.com") ||
+      lower.includes("ig.me") ||
+      lower.includes("youtube.com") ||
+      lower.includes("twitter.com") ||
+      lower.includes("x.com") ||
+      lower.includes("facebook.com") ||
+      lower.includes("linkedin.com") ||
+      lower.includes("threads.net")
+    ) {
+      const normKey = normalizeKey(key);
+      // Skip cells that look like reel/video links from obvious columns
+      if (normKey.includes("reel") || normKey.includes("video") || normKey.includes("live")) continue;
+      return toProfileUrl(cell);
+    }
+  }
+  return null;
+}
+
+/** Fallback: scan every cell for a phone-like value, skipping obvious non-contact columns. */
+function scanRowForPhone(row: Record<string, any>): string {
+  const ignored = ["budget", "price", "cost", "counter", "agreed", "commercial", "amount", "views", "followers", "reel", "link", "url", "date", "percent", "rate", "target", "locked", "final", "gross", "payout", "fee"];
+  for (const [key, value] of Object.entries(row)) {
+    if (value == null) continue;
+    const cell = String(value).trim();
+    if (!cell) continue;
+    const normKey = normalizeKey(key);
+    if (ignored.some((w) => normKey.includes(w))) continue;
+    if (looksLikePhone(cell)) return cell.trim();
+  }
+  return "";
+}
+
+/**
+ * Parse a CSV file (or raw CSV string) into gallery rows, keeping every row
+ * that contains a profile link, handle, or phone number — no Name required.
+ */
+export function parseGalleryCSV(input: File | string): Promise<GalleryImportRow[]> {
+  return new Promise((resolve, reject) => {
+    const complete = (results: Papa.ParseResult<CSVRow>) => {
+      const rows: GalleryImportRow[] = results.data.map((rawRow) => {
+        const row = rawRow as unknown as Record<string, any>;
+
+        const profile =
+          findColumnValue(row, ["profile", "profilelink", "profile link", "instagram", "ig", "iglink", "insta", "social", "sociallink", "profileurl", "profile url", "link", "url"]) ||
+          scanRowForProfile(row) ||
+          undefined;
+        const handle =
+          findColumnValue(row, ["handle", "username", "instagramhandle", "igusername", "instagramid", "igid", "creatorhandle"]) ||
+          extractHandleFromProfile(profile) ||
+          "";
+        const phone =
+          findColumnValue(row, ["phone", "contact", "mobile", "whatsapp", "contactnumber", "contact number", "phonenumber", "phone number", "cell", "tel", "number"]) ||
+          scanRowForPhone(row) ||
+          "";
+        const name =
+          findColumnValue(row, ["name", "creator", "influencer", "creatorsname", "fullname", "full name"]) ||
+          (handle ? `@${handle.replace(/^@/, "")}` : "") ||
+          "Unknown";
+
+        const profile_link = toProfileUrl(profile);
+
+        return {
+          name: name.trim(),
+          handle: handle.replace(/^@/, "").trim(),
+          phone: phone.trim(),
+          profile_link,
+        };
+      });
+
+      // Keep only rows that carry a profile link, handle, or phone
+      const valid = rows.filter((r) => r.profile_link || r.handle || r.phone);
+      resolve(dedupeGalleryRows(valid));
+    };
+
+    if (typeof input === "string") {
+      Papa.parse<CSVRow>(input as string, {
+        header: true,
+        skipEmptyLines: true,
+        complete,
+        error: reject,
+      });
+    } else {
+      Papa.parse<CSVRow>(input as File, {
+        header: true,
+        skipEmptyLines: true,
+        complete,
+        error: reject,
+      });
+    }
+  });
+}
+
+/**
+ * Resolve a row's identity: the profile username (from the handle column, or
+ * extracted from the profile link) plus the contact phone digits.
+ */
+export function galleryRowIdentity(row: GalleryImportRow): {
+  username: string;
+  phone: string;
+} {
+  const username = extractHandleFromProfile(row.handle || row.profile_link || "")
+    .toLowerCase()
+    .replace(/^@/, "")
+    .trim();
+  const phone = row.phone.replace(/\D/g, "");
+  return { username, phone };
+}
+
+/**
+ * Deduplicate gallery rows. A row is considered a repeat of a previous one
+ * when its profile username (from the handle or extracted from the profile
+ * link) matches, or its contact phone matches.
+ */
+export function dedupeGalleryRows(rows: GalleryImportRow[]): GalleryImportRow[] {
+  const seenUsernames = new Set<string>();
+  const seenPhones = new Set<string>();
+  const seenLinks = new Set<string>();
+
+  const out: GalleryImportRow[] = [];
+  for (const row of rows) {
+    const { username, phone } = galleryRowIdentity(row);
+    const link = row.profile_link
+      ?.toLowerCase()
+      .replace(/[?#].*$/, "")
+      .replace(/\/+$/, "")
+      .trim();
+
+    if (
+      (username && seenUsernames.has(username)) ||
+      (phone && seenPhones.has(phone)) ||
+      (link && seenLinks.has(link))
+    ) {
+      continue;
+    }
+
+    if (username) seenUsernames.add(username);
+    if (phone) seenPhones.add(phone);
+    if (link) seenLinks.add(link);
+
+    out.push(row);
+  }
+  return out;
 }
 
 // ─── Format number as Indian Rupees ───────────────────────────────────────────
