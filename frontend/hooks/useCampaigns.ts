@@ -217,10 +217,6 @@ export function useCampaigns() {
     ),
   ];
 
-  const allCreatorsAcrossCampaigns = campaigns.flatMap((c) =>
-    c.creators.filter((cr) => !cr.removed_reason),
-  );
-
   // ─── Campaign CRUD ───────────────────────────────────────────────────────
 
   const createCampaign = useCallback(
@@ -483,18 +479,19 @@ export function useCampaigns() {
     liveCount: creators.filter((c) => c.status === "Live").length,
   };
 
-  /** Sync missing contacts across campaigns by matching profile_link or handle. */
+  /** Sync missing contacts from the creator gallery by matching profile_link or handle. */
   const syncContacts = useCallback(
     async (): Promise<{ updated: number; notFound: number; skipped: number }> => {
       let updated = 0;
       let notFound = 0;
       let skipped = 0;
 
-      // Build a lookup of all creators with non-empty phones, keyed by profile_link and handle
+      // Build a phone lookup from the creator gallery (imported/removed pool),
+      // keyed by profile link and username (handle).
       const phoneLookupByLink = new Map<string, string>();
       const phoneLookupByHandle = new Map<string, string>();
 
-      for (const cr of allCreatorsAcrossCampaigns) {
+      for (const cr of removedCreators) {
         if (!cr.phone || cr.phone.trim() === "") continue;
         const cleanPhone = cr.phone.replace(/\D/g, "");
         if (!cleanPhone) continue;
@@ -506,7 +503,8 @@ export function useCampaigns() {
         if (handle) phoneLookupByHandle.set(handle, cr.phone);
       }
 
-      // Find creators in active campaign with missing phones and try to fill them
+      // Find creators in the active campaign with missing phones and try to fill
+      // them from the gallery, matching by profile link first, then by handle.
       for (const cr of activeCampaign.creators) {
         if (cr.removed_reason) { skipped++; continue; }
         if (cr.phone && cr.phone.replace(/\D/g, "").length >= 5) { skipped++; continue; }
@@ -536,7 +534,7 @@ export function useCampaigns() {
 
       return { updated, notFound, skipped };
     },
-    [activeCampaign.creators, allCreatorsAcrossCampaigns, updateCreator],
+    [activeCampaign.creators, removedCreators, updateCreator],
   );
 
   /** Bulk-import profile links & contacts into the gallery pool, then refresh. */
@@ -562,7 +560,6 @@ export function useCampaigns() {
     activeCampaign,
     activeCampaignId,
     creators,
-    allCreatorsAcrossCampaigns,
     removedCreators,
     selected,
     summary,
