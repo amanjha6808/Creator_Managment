@@ -111,6 +111,18 @@ export function CreatorCards({
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900 truncate">{c.name}</p>
                   <p className="text-xs text-slate-400 truncate">{c.handle}</p>
+                  {c.tags && c.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {c.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <StatusBadge
                   status={c.status}

@@ -167,6 +167,18 @@ export function CreatorTable({
                     <div className="min-w-[120px]">
                       <p className="text-sm font-semibold text-slate-900 leading-tight">{c.name}</p>
                       <p className="text-xs text-slate-400">{c.handle}</p>
+                      {c.tags && c.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {c.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 whitespace-nowrap"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Action buttons directly beside creator name */}

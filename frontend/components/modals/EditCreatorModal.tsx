@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Creator, CreatorUpdate } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Edit3, X } from "lucide-react";
+import { Edit3, X, Tag } from "lucide-react";
 
 interface EditCreatorModalProps {
   creator: Creator;
@@ -21,11 +21,23 @@ export function EditCreatorModal({ creator, onUpdate, onClose }: EditCreatorModa
     profile_link: creator.profile_link ?? "",
     reel_link: creator.reel_link ?? "",
   });
+  const [tags, setTags] = useState<string[]>(creator.tags ?? []);
+  const [tagInput, setTagInput] = useState("");
   const [errors, setErrors] = useState<Partial<Record<"name" | "handle", string>>>({});
   const [loading, setLoading] = useState(false);
 
   const set = (field: keyof typeof form, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
+
+  const addTag = () => {
+    const value = tagInput.trim().replace(/^#/, "");
+    if (!value) return;
+    setTags((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    setTagInput("");
+  };
+
+  const removeTag = (tag: string) =>
+    setTags((prev) => prev.filter((t) => t !== tag));
 
   const validate = (): boolean => {
     const e: Partial<Record<"name" | "handle", string>> = {};
@@ -46,6 +58,7 @@ export function EditCreatorModal({ creator, onUpdate, onClose }: EditCreatorModa
         phone: form.phone.replace(/\D/g, ""),
         profile_link: form.profile_link.trim() || null,
         reel_link: form.reel_link.trim() || null,
+        tags,
       });
       onClose();
     } finally {
@@ -122,6 +135,53 @@ export function EditCreatorModal({ creator, onUpdate, onClose }: EditCreatorModa
             placeholder="https://www.instagram.com/reel/..."
             fullWidth
           />
+
+          {/* Tags */}
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <Tag className="w-3.5 h-3.5 text-slate-400" />
+              Tags
+            </label>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      className="text-indigo-400 hover:text-red-500 cursor-pointer"
+                      aria-label={`Remove tag ${tag}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addTag();
+                  }
+                }}
+                onBlur={addTag}
+                placeholder="e.g. priority, budget issue"
+                className="flex-1"
+              />
+              <Button type="button" variant="secondary" onClick={addTag}>
+                Add
+              </Button>
+            </div>
+            <p className="text-xs text-slate-400">Press Enter or comma to add a tag.</p>
+          </div>
 
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="secondary" onClick={onClose} fullWidth>

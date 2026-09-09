@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       profile_link: body.profile_link ?? null,
       avatar_url: body.avatar_url ?? null,
       status: body.status ?? "Pending",
+      tags: body.tags ?? [],
     };
 
     const { data, error } = await db

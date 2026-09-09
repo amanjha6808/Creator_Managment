@@ -485,7 +485,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <p className="text-sm text-slate-500 text-center">
-                Contacts matched from the creator gallery using profile link or handle.
+                Contacts matched from the creator gallery using the username from each creator's profile link.
               </p>
               <Button variant="primary" onClick={() => setSyncResult(null)} fullWidth>
                 Done

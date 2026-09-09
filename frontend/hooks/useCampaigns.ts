@@ -479,7 +479,7 @@ export function useCampaigns() {
     liveCount: creators.filter((c) => c.status === "Live").length,
   };
 
-  /** Sync missing contacts from the creator gallery by matching profile_link or handle. */
+  /** Sync missing contacts from the creator gallery by matching the username extracted from the profile link. */
   const syncContacts = useCallback(
     async (): Promise<{ updated: number; notFound: number; skipped: number }> => {
       let updated = 0;
@@ -487,42 +487,32 @@ export function useCampaigns() {
       let skipped = 0;
 
       // Build a phone lookup from the creator gallery (imported/removed pool),
-      // keyed by profile link and username (handle).
-      const phoneLookupByLink = new Map<string, string>();
-      const phoneLookupByHandle = new Map<string, string>();
+      // keyed only by the username extracted from each creator's profile link.
+      const phoneLookupByUsername = new Map<string, string>();
 
       for (const cr of removedCreators) {
         if (!cr.phone || cr.phone.trim() === "") continue;
         const cleanPhone = cr.phone.replace(/\D/g, "");
         if (!cleanPhone) continue;
 
-        const link = cr.profile_link?.trim().toLowerCase();
-        if (link) phoneLookupByLink.set(link, cr.phone);
-
-        const handle = cr.handle?.trim().toLowerCase().replace(/^@/, "");
-        if (handle) phoneLookupByHandle.set(handle, cr.phone);
+        const username = extractHandleFromProfile(cr.profile_link || "")
+          .toLowerCase()
+          .replace(/^@/, "")
+          .trim();
+        if (username) phoneLookupByUsername.set(username, cr.phone);
       }
 
       // Find creators in the active campaign with missing phones and try to fill
-      // them from the gallery, matching by profile link first, then by handle.
+      // them from the gallery, matching only by profile link username.
       for (const cr of activeCampaign.creators) {
         if (cr.removed_reason) { skipped++; continue; }
         if (cr.phone && cr.phone.replace(/\D/g, "").length >= 5) { skipped++; continue; }
 
-        // Try matching by profile_link first, then by handle
-        let foundPhone: string | null = null;
-
-        const link = cr.profile_link?.trim().toLowerCase();
-        if (link && phoneLookupByLink.has(link)) {
-          foundPhone = phoneLookupByLink.get(link)!;
-        }
-
-        if (!foundPhone) {
-          const handle = cr.handle?.trim().toLowerCase().replace(/^@/, "");
-          if (handle && phoneLookupByHandle.has(handle)) {
-            foundPhone = phoneLookupByHandle.get(handle)!;
-          }
-        }
+        const username = extractHandleFromProfile(cr.profile_link || "")
+          .toLowerCase()
+          .replace(/^@/, "")
+          .trim();
+        const foundPhone = username ? phoneLookupByUsername.get(username) : undefined;
 
         if (foundPhone) {
           await updateCreator(cr.id, { phone: foundPhone });

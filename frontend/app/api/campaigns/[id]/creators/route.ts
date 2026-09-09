@@ -125,6 +125,7 @@ export async function PUT(
       final_agreed: c.final_agreed ?? null,
       counter_budget: c.counter_budget ?? null,
       collab_type: c.collab_type ?? null,
+      tags: c.tags ?? [],
     }));
 
     const { data, error: insError } = await db

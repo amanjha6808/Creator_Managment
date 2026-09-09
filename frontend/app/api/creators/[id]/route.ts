@@ -40,6 +40,7 @@ export async function PATCH(
       "name", "phone", "handle", "target_budget", "locked_commercials",
       "reel_link", "profile_link", "avatar_url", "status",
       "removed_reason", "removed_at", "final_agreed", "counter_budget", "collab_type",
+      "tags",
     ];
 
     const update: Record<string, any> = {};

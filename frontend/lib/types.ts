@@ -43,6 +43,9 @@ export interface Creator {
   /** When set, the creator has been removed from the campaign and moved to the gallery. */
   removed_reason?: string | null;
   removed_at?: string | null;
+
+  /** Custom labels/tags attached to the creator (e.g. "priority", "budget issue"). */
+  tags?: string[];
 }
 
 export interface CreatorCreate {
@@ -59,6 +62,7 @@ export interface CreatorCreate {
   collab_type?: string;
   removed_reason?: string | null;
   removed_at?: string | null;
+  tags?: string[];
 }
 
 export interface CreatorUpdate {
@@ -75,6 +79,7 @@ export interface CreatorUpdate {
   collab_type?: string;
   removed_reason?: string | null;
   removed_at?: string | null;
+  tags?: string[];
 }
 
 // ─── CSV Row (from upload) ─────────────────────────────────────────────────────
